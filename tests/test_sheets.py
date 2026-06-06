@@ -40,7 +40,7 @@ def test_get_client_raises_on_missing_env(monkeypatch):
 
     import importlib
     import sheets
-    importlib.reload(sheets)
+    importlib.reload(sheets)  # reloading resets _client = None and clears module cache
 
     with pytest.raises(KeyError):
         sheets.get_client()
@@ -150,7 +150,7 @@ def test_get_watching_tracking_returns_only_tracking(monkeypatch):
 
 
 def test_update_award_sets_fields_and_status(monkeypatch):
-    """update_award must set award_date, award_price, award_vendor, status=awarded, last_checked."""
+    """update_award must batch-update award fields in a single API call."""
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{}")
     monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
 
@@ -167,14 +167,18 @@ def test_update_award_sets_fields_and_status(monkeypatch):
             }
         )
 
-    # watching cols: 1=id,2=name,3=unit,4=date,5=category,6=added_at,7=status,
-    #                8=award_date,9=award_price,10=award_vendor,11=last_checked
-    cell_updates = {(c.args[0], c.args[1]): c.args[2] for c in ws.update_cell.call_args_list}
-    assert cell_updates[(3, 7)] == 'awarded'       # status col
-    assert cell_updates[(3, 8)] == '2026-06-05'    # award_date col
-    assert cell_updates[(3, 9)] == '500000'        # award_price col
-    assert cell_updates[(3, 10)] == 'Great Corp'   # award_vendor col
-    assert (3, 11) in cell_updates                 # last_checked col (value is a timestamp)
+    ws.update.assert_called_once()
+    call_args = ws.update.call_args
+    range_str = call_args[0][0]
+    values = call_args[0][1]
+    assert range_str == 'G3:K3'
+    row = values[0]
+    assert row[0] == 'awarded'        # status
+    assert row[1] == '2026-06-05'     # award_date
+    assert row[2] == '500000'         # award_price
+    assert row[3] == 'Great Corp'     # award_vendor
+    # row[4] is last_checked timestamp — just verify it exists
+    assert row[4]
 
 
 def test_cleanup_raw_deletes_old_rows(monkeypatch):
@@ -203,7 +207,7 @@ def test_cleanup_raw_deletes_old_rows(monkeypatch):
         deleted = sheets.cleanup_raw(days=90)
 
     assert deleted == 1  # only OLD_1 deleted; OLD_2 protected; NEW_1 kept
-    raw_ws.delete_rows.assert_called_once_with(2)  # OLD_1 is row 2 (1-based, header=row1)
+    raw_ws.delete_rows.assert_called_once_with(2, 2)  # single row, start==end
 
 
 def test_cleanup_raw_no_deletions(monkeypatch):

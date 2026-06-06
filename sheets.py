@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 
 _SCOPES = [
-    'https://spreadsheets.google.com/feeds',
-    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/spreadsheets',
 ]
 
 RAW_COLS      = ['id', 'name', 'unit', 'date', 'category', 'method', 'fetched_at']
@@ -18,11 +17,16 @@ KEYWORDS_COLS = ['keyword', 'created_at', 'active']
 
 TZ = pytz.timezone('Asia/Taipei')
 
+_client: gspread.Client | None = None
+
 
 def get_client() -> gspread.Client:
-    info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-    creds = Credentials.from_service_account_info(info, scopes=_SCOPES)
-    return gspread.authorize(creds)
+    global _client
+    if _client is None:
+        info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
+        creds = Credentials.from_service_account_info(info, scopes=_SCOPES)
+        _client = gspread.authorize(creds)
+    return _client
 
 
 def _get_sheet(name: str) -> gspread.Worksheet:
@@ -56,14 +60,16 @@ def append_raw(records: list[dict]) -> int:
 def update_award(row_index: int, award_info: dict) -> None:
     ws = _get_sheet('watching')
     now = datetime.now(TZ).isoformat()
-    # Column positions (1-indexed) based on WATCHING_COLS order:
-    # 1=id, 2=name, 3=unit, 4=date, 5=category, 6=added_at, 7=status,
-    # 8=award_date, 9=award_price, 10=award_vendor, 11=last_checked
-    ws.update_cell(row_index, 8,  award_info.get('award_date', ''))
-    ws.update_cell(row_index, 9,  award_info.get('award_price', ''))
-    ws.update_cell(row_index, 10, award_info.get('award_vendor', ''))
-    ws.update_cell(row_index, 7,  'awarded')
-    ws.update_cell(row_index, 11, now)
+    # Single batch update: columns G-K (status, award_date, award_price, award_vendor, last_checked)
+    ws.update(
+        f'G{row_index}:K{row_index}',
+        [['awarded',
+          award_info.get('award_date', ''),
+          award_info.get('award_price', ''),
+          award_info.get('award_vendor', ''),
+          now]],
+        value_input_option='RAW',
+    )
 
 
 def cleanup_raw(days: int = 90) -> int:
@@ -91,8 +97,21 @@ def cleanup_raw(days: int = 90) -> int:
         if row_date < cutoff and row[id_col] not in watching_ids:
             rows_to_delete.append(i)
 
-    for row_idx in sorted(rows_to_delete, reverse=True):
-        raw_ws.delete_rows(row_idx)
+    # Delete contiguous ranges from bottom to top to avoid index shifting
+    if rows_to_delete:
+        sorted_rows = sorted(rows_to_delete, reverse=True)
+        # Group into contiguous runs
+        groups = []
+        start = end = sorted_rows[0]
+        for idx in sorted_rows[1:]:
+            if idx == end - 1:
+                end = idx
+            else:
+                groups.append((end, start))
+                start = end = idx
+        groups.append((end, start))
+        for first, last in groups:
+            raw_ws.delete_rows(first, last)
 
     return len(rows_to_delete)
 

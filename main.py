@@ -1,5 +1,6 @@
 # main.py
 import argparse
+import sys
 
 import crawler
 import sheets
@@ -31,10 +32,14 @@ def main():
                         help='Fetch past N days instead of running daily job')
     args = parser.parse_args()
 
-    if args.backfill > 0:
-        run_backfill(args.backfill)
-    else:
-        run_daily()
+    try:
+        if args.backfill > 0:
+            run_backfill(args.backfill)
+        else:
+            run_daily()
+    except Exception as e:
+        print(f'[FATAL] {e}', file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
