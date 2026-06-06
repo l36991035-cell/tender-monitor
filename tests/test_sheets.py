@@ -175,3 +175,57 @@ def test_update_award_sets_fields_and_status(monkeypatch):
     assert cell_updates[(3, 9)] == '500000'        # award_price col
     assert cell_updates[(3, 10)] == 'Great Corp'   # award_vendor col
     assert (3, 11) in cell_updates                 # last_checked col (value is a timestamp)
+
+
+def test_cleanup_raw_deletes_old_rows(monkeypatch):
+    """cleanup_raw must delete rows older than N days, but preserve watching ids."""
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{}")
+    monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
+
+    raw_ws = MagicMock()
+    raw_ws.get_all_values.return_value = [
+        ['id', 'name', 'unit', 'date', 'category', 'method', 'fetched_at'],
+        ['OLD_1', 'Old Tender', 'U1', '2025-01-01', '工程', '公開', '2025-01-01T08:00:00'],  # old, not watching
+        ['OLD_2', 'Watched Old', 'U2', '2025-01-02', '財物', '公開', '2025-01-02T08:00:00'],  # old but in watching
+        ['NEW_1', 'New Tender', 'U3', '2026-06-05', '勞務', '公開', '2026-06-05T08:00:00'],  # new, keep
+    ]
+
+    watching_ws = MagicMock()
+    watching_ws.get_all_records.return_value = [
+        {'id': 'OLD_2', 'status': 'tracking'},
+    ]
+
+    def mock_get_sheet(name):
+        return raw_ws if name == 'raw' else watching_ws
+
+    import sheets
+    with patch.object(sheets, '_get_sheet', side_effect=mock_get_sheet):
+        deleted = sheets.cleanup_raw(days=90)
+
+    assert deleted == 1  # only OLD_1 deleted; OLD_2 protected; NEW_1 kept
+    raw_ws.delete_rows.assert_called_once_with(2)  # OLD_1 is row 2 (1-based, header=row1)
+
+
+def test_cleanup_raw_no_deletions(monkeypatch):
+    """cleanup_raw returns 0 when all rows are recent."""
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{}")
+    monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
+
+    raw_ws = MagicMock()
+    raw_ws.get_all_values.return_value = [
+        ['id', 'name', 'unit', 'date', 'category', 'method', 'fetched_at'],
+        ['X_1', 'Tender', 'U1', '2026-06-05', '工程', '公開', '2026-06-05T08:00:00'],
+    ]
+
+    watching_ws = MagicMock()
+    watching_ws.get_all_records.return_value = []
+
+    def mock_get_sheet(name):
+        return raw_ws if name == 'raw' else watching_ws
+
+    import sheets
+    with patch.object(sheets, '_get_sheet', side_effect=mock_get_sheet):
+        deleted = sheets.cleanup_raw(days=90)
+
+    assert deleted == 0
+    raw_ws.delete_rows.assert_not_called()

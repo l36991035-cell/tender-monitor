@@ -66,6 +66,37 @@ def update_award(row_index: int, award_info: dict) -> None:
     ws.update_cell(row_index, 11, now)
 
 
+def cleanup_raw(days: int = 90) -> int:
+    raw_ws = _get_sheet('raw')
+    watching_ws = _get_sheet('watching')
+
+    all_values = raw_ws.get_all_values()
+    if len(all_values) <= 1:
+        return 0
+
+    watching_ids = {r['id'] for r in watching_ws.get_all_records()}
+    headers = all_values[0]
+    date_col = headers.index('date')
+    id_col = headers.index('id')
+    cutoff = datetime.now(TZ).date() - timedelta(days=days)
+
+    rows_to_delete = []
+    for i, row in enumerate(all_values[1:], start=2):
+        if not row or not row[date_col]:
+            continue
+        try:
+            row_date = datetime.strptime(row[date_col], '%Y-%m-%d').date()
+        except ValueError:
+            continue
+        if row_date < cutoff and row[id_col] not in watching_ids:
+            rows_to_delete.append(i)
+
+    for row_idx in sorted(rows_to_delete, reverse=True):
+        raw_ws.delete_rows(row_idx)
+
+    return len(rows_to_delete)
+
+
 def get_watching_tracking() -> list[dict]:
     ws = _get_sheet('watching')
     records = ws.get_all_records()
