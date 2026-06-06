@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>標案監控 — 追蹤中</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; color: #222; }
+    nav { background: #1e3a5f; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; }
+    .nav-brand { color: #fff; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+    .nav-links a { color: #a8c4e0; text-decoration: none; margin-left: 24px; font-size: 14px; padding: 4px 0; border-bottom: 2px solid transparent; }
+    .nav-links a:hover, .nav-links a.active { color: #fff; border-bottom-color: #4a9fd4; }
+    main { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 20px; color: #1e3a5f; margin-bottom: 16px; }
+    .table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { background: #1e3a5f; color: #fff; padding: 12px 16px; text-align: left; font-weight: 600; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody td { padding: 10px 16px; vertical-align: top; font-size: 13px; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .s-tracking { background: #dbeafe; color: #1d4ed8; }
+    .s-awarded  { background: #dcfce7; color: #166534; }
+    .s-closed   { background: #f1f5f9; color: #64748b; }
+    .td-name a { color: #1e3a5f; text-decoration: none; font-weight: 500; }
+    .td-name a:hover { text-decoration: underline; }
+    .btn-close { padding: 3px 8px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    .btn-close:hover { background: #e2e8f0; }
+    .msg { text-align: center; padding: 48px; color: #64748b; font-size: 15px; }
+    .error { color: #dc2626; }
+    .award-info { color: #166534; font-size: 12px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">標案監控</div>
+  <div class="nav-links">
+    <a href="index.html">標案瀏覽</a>
+    <a href="watching.html" class="active">追蹤中</a>
+    <a href="keywords.html">關鍵字</a>
+  </div>
+</nav>
+<main>
+  <h1>追蹤中標案</h1>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>狀態</th>
+          <th>標案名稱</th>
+          <th>機關</th>
+          <th>公告日期</th>
+          <th>決標資訊</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script>
+async function sheetsGet(range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(range)}?key=${CONFIG.GOOGLE_API_KEY}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Sheets API ${r.status}`);
+  return (await r.json()).values || [];
+}
+
+function tenderUrl(id) {
+  const pk = id.replace(/^TIQ-\d+-/, '');
+  return `https://web.pcc.gov.tw/prkms/urlSelector/common/tpam?pk=${pk}`;
+}
+
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function statusBadge(s) {
+  const map = { tracking: ['追蹤中','s-tracking'], awarded: ['已決標','s-awarded'], closed: ['已關閉','s-closed'] };
+  const [label, cls] = map[s] || ['未知','s-closed'];
+  return `<span class="status-badge ${cls}">${label}</span>`;
+}
+
+async function markClosed(id) {
+  if (!CONFIG.APPS_SCRIPT_URL) { alert('Apps Script 尚未設定，請填入 config.js 的 APPS_SCRIPT_URL。'); return; }
+  const r = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({action:'update_status', data:{id, status:'closed'}})
+  });
+  const d = await r.json();
+  if (d.success) { location.reload(); }
+  else alert('失敗：' + d.error);
+}
+
+async function init() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="msg">載入中…</td></tr>';
+  try {
+    const rows = await sheetsGet('watching');
+    const data = rows.slice(1).map(r => ({
+      id: r[0]||'', name: r[1]||'', unit: r[2]||'', date: r[3]||'',
+      status: r[6]||'tracking', award_date: r[7]||'', award_price: r[8]||'', award_vendor: r[9]||''
+    })).filter(t => t.id);
+
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" class="msg">目前沒有追蹤中的標案。</td></tr>'; return; }
+
+    tbody.innerHTML = data.map(t => `
+      <tr>
+        <td>${statusBadge(t.status)}</td>
+        <td class="td-name"><a href="${tenderUrl(t.id)}" target="_blank" rel="noopener">${esc(t.name)}</a></td>
+        <td>${esc(t.unit)}</td>
+        <td style="white-space:nowrap">${t.date}</td>
+        <td>${t.award_date ? `<div class="award-info">
+          📅 ${t.award_date}<br>
+          💰 ${t.award_price ? Number(t.award_price).toLocaleString()+'元' : '—'}<br>
+          🏢 ${esc(t.award_vendor)}
+        </div>` : '—'}</td>
+        <td>${t.status !== 'closed' ? `<button class="btn-close" onclick="markClosed('${t.id}')">標記關閉</button>` : ''}</td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="msg error">載入失敗：${e.message}</td></tr>`;
+  }
+}
+init();
+</script>
+</body>
+</html>
