@@ -60,7 +60,7 @@
 </nav>
 <main>
   <div class="search-bar">
-    <input type="text" id="search" placeholder="搜尋標案名稱、機關名稱…" oninput="onSearchInput()">
+    <input type="text" id="search" placeholder="搜尋標案名稱、機關名稱…" oninput="onSearchInput()" onkeydown="if(event.key==='Enter') doSearch()">
     <button onclick="doSearch()">搜尋</button>
   </div>
   <div class="stats" id="stats"></div>
