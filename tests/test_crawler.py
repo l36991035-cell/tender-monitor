@@ -84,3 +84,62 @@ def test_fetch_date_handles_empty_response():
         count = crawler.fetch_date(date(2026, 6, 6))
 
     assert count == 0
+
+
+SAMPLE_DETAIL_AWARDED = {
+    "detail": {
+        "award": {
+            "award_date": "2026-06-10",
+            "award_price": "1500000",
+            "award_vendor": "優良建設股份有限公司"
+        }
+    }
+}
+
+SAMPLE_DETAIL_NOT_AWARDED = {
+    "detail": {
+        "award": {}
+    }
+}
+
+
+def test_get_award_info_returns_dict_when_awarded():
+    """_get_award_info must return award fields when award_date is present."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = SAMPLE_DETAIL_AWARDED
+    mock_response.raise_for_status.return_value = None
+
+    with patch('requests.get', return_value=mock_response) as mock_get:
+        import crawler
+        result = crawler._get_award_info('A04010000_112001')
+
+    mock_get.assert_called_once_with(
+        'https://pcc.g0v.ronny.tw/tender/detail',
+        params={'unit_id': 'A04010000', 'job_number': '112001'},
+        timeout=30
+    )
+    assert result == {
+        'award_date': '2026-06-10',
+        'award_price': '1500000',
+        'award_vendor': '優良建設股份有限公司',
+    }
+
+
+def test_get_award_info_returns_none_when_not_awarded():
+    """_get_award_info must return None when award_date is missing."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = SAMPLE_DETAIL_NOT_AWARDED
+    mock_response.raise_for_status.return_value = None
+
+    with patch('requests.get', return_value=mock_response):
+        import crawler
+        result = crawler._get_award_info('B09010000_220005')
+
+    assert result is None
+
+
+def test_get_award_info_invalid_id_returns_none():
+    """_get_award_info must return None when tender id has no underscore."""
+    import crawler
+    result = crawler._get_award_info('INVALIDID')
+    assert result is None

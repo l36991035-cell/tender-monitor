@@ -12,6 +12,29 @@ _DELAY = 0.5
 TZ = pytz.timezone('Asia/Taipei')
 
 
+def _get_award_info(tender_id: str) -> dict | None:
+    if '_' not in tender_id:
+        return None
+    unit_id, job_number = tender_id.split('_', 1)
+
+    resp = requests.get(
+        f'{BASE_URL}/tender/detail',
+        params={'unit_id': unit_id, 'job_number': job_number},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    award = resp.json().get('detail', {}).get('award', {})
+
+    if not award or not award.get('award_date'):
+        return None
+
+    return {
+        'award_date':   award.get('award_date', ''),
+        'award_price':  award.get('award_price', ''),
+        'award_vendor': award.get('award_vendor', ''),
+    }
+
+
 def fetch_date(target_date: date) -> int:
     url = f'{BASE_URL}/index/date/{target_date.isoformat()}'
     resp = requests.get(url, timeout=30)
