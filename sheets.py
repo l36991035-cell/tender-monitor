@@ -106,3 +106,9 @@ def get_watching_tracking() -> list[dict]:
             row['_row_index'] = i
             result.append(row)
     return result
+
+
+def get_keywords() -> list[str]:
+    ws = _get_sheet('keywords')
+    records = ws.get_all_records()
+    return [r['keyword'] for r in records if str(r.get('active', '')).upper() == 'TRUE']

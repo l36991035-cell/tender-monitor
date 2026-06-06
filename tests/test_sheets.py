@@ -229,3 +229,23 @@ def test_cleanup_raw_no_deletions(monkeypatch):
 
     assert deleted == 0
     raw_ws.delete_rows.assert_not_called()
+
+
+def test_get_keywords_returns_active_only(monkeypatch):
+    """get_keywords must return only keywords where active == 'TRUE' (case-insensitive)."""
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{}")
+    monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
+
+    ws = MagicMock()
+    ws.get_all_records.return_value = [
+        {'keyword': '污水', 'created_at': '2026-01-01', 'active': 'TRUE'},
+        {'keyword': '道路', 'created_at': '2026-01-02', 'active': 'FALSE'},
+        {'keyword': '橋梁', 'created_at': '2026-01-03', 'active': 'TRUE'},
+        {'keyword': '停用', 'created_at': '2026-01-04', 'active': 'false'},
+    ]
+
+    import sheets
+    with patch.object(sheets, '_get_sheet', return_value=ws):
+        result = sheets.get_keywords()
+
+    assert result == ['污水', '橋梁']
