@@ -70,3 +70,20 @@ def fetch_backfill(days: int) -> int:
         total += count
         time.sleep(_DELAY)
     return total
+
+
+def check_awards() -> int:
+    tracking = sheets.get_watching_tracking()
+    updated = 0
+
+    for tender in tracking:
+        try:
+            award_info = _get_award_info(tender['id'])
+            if award_info:
+                sheets.update_award(tender['_row_index'], award_info)
+                updated += 1
+        except Exception as e:
+            print(f"[check_awards] error for {tender['id']}: {e}")
+        time.sleep(_DELAY)
+
+    return updated

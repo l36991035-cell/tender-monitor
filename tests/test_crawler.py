@@ -143,3 +143,44 @@ def test_get_award_info_invalid_id_returns_none():
     import crawler
     result = crawler._get_award_info('INVALIDID')
     assert result is None
+
+
+def test_check_awards_updates_awarded_tenders():
+    """check_awards must call update_award for each tender that now has award info."""
+    tracking = [
+        {'id': 'A_1', 'name': 'T1', '_row_index': 2, 'status': 'tracking'},
+        {'id': 'B_2', 'name': 'T2', '_row_index': 3, 'status': 'tracking'},
+    ]
+    award_info = {'award_date': '2026-06-10', 'award_price': '100000', 'award_vendor': 'Corp'}
+
+    with patch('crawler.sheets') as mock_sheets, \
+         patch('crawler._get_award_info') as mock_award, \
+         patch('time.sleep'):  # skip actual sleep
+        mock_sheets.get_watching_tracking.return_value = tracking
+        mock_award.side_effect = [award_info, None]  # A_1 awarded, B_2 not yet
+
+        import crawler
+        updated = crawler.check_awards()
+
+    assert updated == 1
+    mock_sheets.update_award.assert_called_once_with(2, award_info)
+
+
+def test_check_awards_continues_on_error():
+    """check_awards must not abort when a single tender check fails."""
+    tracking = [
+        {'id': 'A_1', '_row_index': 2, 'status': 'tracking'},
+        {'id': 'B_2', '_row_index': 3, 'status': 'tracking'},
+    ]
+
+    with patch('crawler.sheets') as mock_sheets, \
+         patch('crawler._get_award_info') as mock_award, \
+         patch('time.sleep'):
+        mock_sheets.get_watching_tracking.return_value = tracking
+        mock_award.side_effect = [Exception("network error"),
+                                   {'award_date': '2026-06-10', 'award_price': '50000', 'award_vendor': 'Y'}]
+
+        import crawler
+        updated = crawler.check_awards()
+
+    assert updated == 1  # B_2 succeeded despite A_1 error
