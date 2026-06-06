@@ -125,7 +125,7 @@ function renderRows(rows) {
       <td class="td-unit">${esc(t.unit)}</td>
       <td class="td-name"><a href="${tenderUrl(t.id)}" target="_blank" rel="noopener">${esc(t.name)}</a></td>
       <td class="td-method">${esc(t.method)}</td>
-      <td><button class="btn-watch" data-t="${esc(JSON.stringify(t))}" onclick="addWatch(JSON.parse(this.dataset.t))">加入追蹤</button></td>
+      <td><button class="btn-watch" data-t="${encodeURIComponent(JSON.stringify(t))}" onclick="addWatch(JSON.parse(decodeURIComponent(this.dataset.t)))">加入追蹤</button></td>
     </tr>`).join('');
 }
 
