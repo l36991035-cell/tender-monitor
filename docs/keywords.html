@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>標案監控 — 關鍵字管理</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; color: #222; }
+    nav { background: #1e3a5f; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; }
+    .nav-brand { color: #fff; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+    .nav-links a { color: #a8c4e0; text-decoration: none; margin-left: 24px; font-size: 14px; padding: 4px 0; border-bottom: 2px solid transparent; }
+    .nav-links a:hover, .nav-links a.active { color: #fff; border-bottom-color: #4a9fd4; }
+    main { max-width: 680px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 20px; color: #1e3a5f; margin-bottom: 20px; }
+    .add-form { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 24px; }
+    .add-form label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #1e3a5f; }
+    .add-form .row { display: flex; gap: 8px; }
+    .add-form input { flex: 1; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; outline: none; }
+    .add-form input:focus { border-color: #1e3a5f; box-shadow: 0 0 0 3px rgba(30,58,95,.1); }
+    .btn-primary { padding: 9px 20px; background: #1e3a5f; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
+    .btn-primary:hover { background: #2a4f7c; }
+    .kw-list { display: flex; flex-direction: column; gap: 8px; }
+    .kw-card { background: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; align-items: center; gap: 12px; }
+    .kw-card.inactive { opacity: .5; }
+    .kw-text { flex: 1; font-size: 15px; font-weight: 500; }
+    .kw-date { font-size: 12px; color: #94a3b8; }
+    .toggle { position: relative; width: 40px; height: 22px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 22px; cursor: pointer; transition: .2s; }
+    .slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+    input:checked + .slider { background: #1e3a5f; }
+    input:checked + .slider:before { transform: translateX(18px); }
+    .btn-del { padding: 4px 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    .btn-del:hover { background: #dc2626; color: #fff; }
+    .msg { text-align: center; padding: 40px; color: #64748b; }
+    .error { color: #dc2626; }
+    .note { font-size: 13px; color: #64748b; margin-top: 8px; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">標案監控</div>
+  <div class="nav-links">
+    <a href="index.html">標案瀏覽</a>
+    <a href="watching.html">追蹤中</a>
+    <a href="keywords.html" class="active">關鍵字</a>
+  </div>
+</nav>
+<main>
+  <h1>關鍵字管理</h1>
+  <div class="add-form">
+    <label>新增關鍵字</label>
+    <div class="row">
+      <input type="text" id="new-kw" placeholder="輸入關鍵字，例如：污水處理">
+      <button class="btn-primary" onclick="addKeyword()">新增</button>
+    </div>
+    <p class="note">關鍵字會在標案瀏覽頁面自動填入搜尋框（啟用中的關鍵字）。</p>
+  </div>
+  <div class="kw-list" id="kw-list"><div class="msg">載入中…</div></div>
+</main>
+
+<script src="config.js"></script>
+<script>
+async function sheetsGet(range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(range)}?key=${CONFIG.GOOGLE_API_KEY}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Sheets API ${r.status}`);
+  return (await r.json()).values || [];
+}
+
+async function appsScript(payload) {
+  if (!CONFIG.APPS_SCRIPT_URL) { alert('Apps Script 尚未設定，請填入 config.js 的 APPS_SCRIPT_URL。'); return null; }
+  const r = await fetch(CONFIG.APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) });
+  return r.json();
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function loadList() {
+  const el = document.getElementById('kw-list');
+  try {
+    const rows = await sheetsGet('keywords');
+    const kws = rows.slice(1).map(r => ({ keyword: r[0]||'', created_at: r[1]||'', active: (r[2]||'').toUpperCase()==='TRUE' })).filter(k=>k.keyword);
+    if (!kws.length) { el.innerHTML = '<div class="msg">尚無關鍵字。</div>'; return; }
+    el.innerHTML = kws.map(k => `
+      <div class="kw-card ${k.active?'':'inactive'}">
+        <div style="flex:1">
+          <div class="kw-text">${esc(k.keyword)}</div>
+          <div class="kw-date">建立：${k.created_at}</div>
+        </div>
+        <label class="toggle" title="${k.active?'停用':'啟用'}">
+          <input type="checkbox" ${k.active?'checked':''} onchange="toggleKw('${esc(k.keyword)}', this.checked)">
+          <span class="slider"></span>
+        </label>
+        <button class="btn-del" onclick="deleteKw('${esc(k.keyword)}')">刪除</button>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="msg error">載入失敗：${e.message}</div>`;
+  }
+}
+
+async function addKeyword() {
+  const input = document.getElementById('new-kw');
+  const kw = input.value.trim();
+  if (!kw) { alert('請輸入關鍵字。'); return; }
+  const d = await appsScript({action:'add_keyword', data:{keyword:kw}});
+  if (!d) return;
+  if (d.success) { input.value = ''; loadList(); }
+  else alert('失敗：' + d.error);
+}
+
+async function toggleKw(keyword, active) {
+  const d = await appsScript({action:'toggle_keyword', data:{keyword, active: active ? 'TRUE' : 'FALSE'}});
+  if (!d) return;
+  loadList();
+}
+
+async function deleteKw(keyword) {
+  if (!confirm(`確定刪除關鍵字「${keyword}」？`)) return;
+  const d = await appsScript({action:'delete_keyword', data:{keyword}});
+  if (!d) return;
+  if (d.success) loadList();
+  else alert('失敗：' + d.error);
+}
+
+loadList();
+</script>
+</body>
+</html>
