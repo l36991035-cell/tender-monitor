@@ -71,8 +71,8 @@ async function sheetsGet(range) {
 
 async function appsScript(payload) {
   if (!CONFIG.APPS_SCRIPT_URL) { alert('Apps Script 尚未設定，請填入 config.js 的 APPS_SCRIPT_URL。'); return null; }
-  const r = await fetch(CONFIG.APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) });
-  return r.json();
+  await fetch(CONFIG.APPS_SCRIPT_URL, { method:'POST', mode:'no-cors', body: JSON.stringify(payload) });
+  return {success: true};
 }
 
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

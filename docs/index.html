@@ -161,12 +161,18 @@ function onSearchInput() {
   if (!document.getElementById('search').value.trim()) doSearch();
 }
 
-function addWatch(t) {
-  if (!CONFIG.APPS_SCRIPT_URL) { alert('Apps Script 尚未設定，請完成 Apps Script 計畫後填入 config.js 的 APPS_SCRIPT_URL。'); return; }
-  fetch(CONFIG.APPS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({action:'add_watching', data: {id:t.id, name:t.name, unit:t.unit, date:t.date, category:t.category}})
-  }).then(r=>r.json()).then(d => alert(d.success ? '已加入追蹤！' : '失敗：'+d.error));
+async function addWatch(t) {
+  if (!CONFIG.APPS_SCRIPT_URL) { alert('Apps Script 尚未設定，請填入 config.js 的 APPS_SCRIPT_URL。'); return; }
+  try {
+    await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({action:'add_watching', data: {id:t.id, name:t.name, unit:t.unit, date:t.date, category:t.category}})
+    });
+    alert('已送出加入追蹤！請稍後至「追蹤中」頁面確認。');
+  } catch(e) {
+    alert('送出失敗：' + e.message);
+  }
 }
 
 function esc(s) {
