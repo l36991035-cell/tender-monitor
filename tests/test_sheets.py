@@ -21,7 +21,7 @@ def test_get_client_reads_env_var(monkeypatch):
     monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
 
     with patch("gspread.authorize") as mock_auth, \
-         patch("google.oauth2.service_account.Credentials.from_service_account_info") as mock_creds:
+         patch("sheets.Credentials.from_service_account_info") as mock_creds:
         mock_creds.return_value = MagicMock()
         mock_auth.return_value = MagicMock()
 
