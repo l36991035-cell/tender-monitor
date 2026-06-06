@@ -53,6 +53,19 @@ def append_raw(records: list[dict]) -> int:
     return len(rows_to_add)
 
 
+def update_award(row_index: int, award_info: dict) -> None:
+    ws = _get_sheet('watching')
+    now = datetime.now(TZ).isoformat()
+    # Column positions (1-indexed) based on WATCHING_COLS order:
+    # 1=id, 2=name, 3=unit, 4=date, 5=category, 6=added_at, 7=status,
+    # 8=award_date, 9=award_price, 10=award_vendor, 11=last_checked
+    ws.update_cell(row_index, 8,  award_info.get('award_date', ''))
+    ws.update_cell(row_index, 9,  award_info.get('award_price', ''))
+    ws.update_cell(row_index, 10, award_info.get('award_vendor', ''))
+    ws.update_cell(row_index, 7,  'awarded')
+    ws.update_cell(row_index, 11, now)
+
+
 def get_watching_tracking() -> list[dict]:
     ws = _get_sheet('watching')
     records = ws.get_all_records()

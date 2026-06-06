@@ -147,3 +147,31 @@ def test_get_watching_tracking_returns_only_tracking(monkeypatch):
     assert result[0]['_row_index'] == 2  # header is row 1, first data row is row 2
     assert result[1]['id'] == 'C_3'
     assert result[1]['_row_index'] == 4  # third data row (B_2 is row 3, C_3 is row 4)
+
+
+def test_update_award_sets_fields_and_status(monkeypatch):
+    """update_award must set award_date, award_price, award_vendor, status=awarded, last_checked."""
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{}")
+    monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
+
+    ws = MagicMock()
+
+    import sheets
+    with patch.object(sheets, '_get_sheet', return_value=ws):
+        sheets.update_award(
+            row_index=3,
+            award_info={
+                'award_date': '2026-06-05',
+                'award_price': '500000',
+                'award_vendor': 'Great Corp',
+            }
+        )
+
+    # watching cols: 1=id,2=name,3=unit,4=date,5=category,6=added_at,7=status,
+    #                8=award_date,9=award_price,10=award_vendor,11=last_checked
+    cell_updates = {(c.args[0], c.args[1]): c.args[2] for c in ws.update_cell.call_args_list}
+    assert cell_updates[(3, 7)] == 'awarded'       # status col
+    assert cell_updates[(3, 8)] == '2026-06-05'    # award_date col
+    assert cell_updates[(3, 9)] == '500000'        # award_price col
+    assert cell_updates[(3, 10)] == 'Great Corp'   # award_vendor col
+    assert (3, 11) in cell_updates                 # last_checked col (value is a timestamp)
