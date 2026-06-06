@@ -28,6 +28,8 @@
     .td-name a:hover { text-decoration: underline; }
     .btn-close { padding: 3px 8px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; cursor: pointer; }
     .btn-close:hover { background: #e2e8f0; }
+    .btn-del { padding: 3px 8px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    .btn-del:hover { background: #dc2626; color: #fff; }
     .msg { text-align: center; padding: 48px; color: #64748b; font-size: 15px; }
     .error { color: #dc2626; }
     .award-info { color: #166534; font-size: 12px; margin-top: 4px; }
@@ -100,6 +102,21 @@ async function markClosed(id) {
   }
 }
 
+async function deleteWatching(id) {
+  if (!confirm('確定要從追蹤清單移除這筆標案？')) return;
+  if (!CONFIG.APPS_SCRIPT_URL) { alert('Apps Script 尚未設定。'); return; }
+  try {
+    await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({action:'delete_watching', data:{id}})
+    });
+    location.reload();
+  } catch(e) {
+    alert('送出失敗：' + e.message);
+  }
+}
+
 async function init() {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '<tr><td colspan="6" class="msg">載入中…</td></tr>';
@@ -123,7 +140,10 @@ async function init() {
           💰 ${t.award_price ? Number(t.award_price).toLocaleString()+'元' : '—'}<br>
           🏢 ${esc(t.award_vendor)}
         </div>` : '—'}</td>
-        <td>${t.status !== 'closed' ? `<button class="btn-close" onclick="markClosed('${t.id}')">標記關閉</button>` : ''}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          ${t.status !== 'closed' ? `<button class="btn-close" onclick="markClosed('${t.id}')">標記關閉</button>` : ''}
+          <button class="btn-del" onclick="deleteWatching('${t.id}')">移除</button>
+        </td>
       </tr>`).join('');
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="6" class="msg error">載入失敗：${e.message}</td></tr>`;
