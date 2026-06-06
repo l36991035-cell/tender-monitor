@@ -51,3 +51,14 @@ def append_raw(records: list[dict]) -> int:
         ws.append_rows(rows_to_add, value_input_option='RAW')
 
     return len(rows_to_add)
+
+
+def get_watching_tracking() -> list[dict]:
+    ws = _get_sheet('watching')
+    records = ws.get_all_records()
+    result = []
+    for i, row in enumerate(records, start=2):  # row 1 is header; data starts at 2
+        if row.get('status') == 'tracking':
+            row['_row_index'] = i
+            result.append(row)
+    return result

@@ -118,3 +118,32 @@ def test_append_raw_empty_sheet(monkeypatch):
         ])
 
     assert count == 1
+
+
+def test_get_watching_tracking_returns_only_tracking(monkeypatch):
+    """get_watching_tracking must return only rows where status == 'tracking', with _row_index."""
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{}")
+    monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
+
+    ws = MagicMock()
+    ws.get_all_records.return_value = [
+        {'id': 'A_1', 'name': 'Tender 1', 'unit': 'U1', 'date': '2026-06-01',
+         'category': '工程', 'added_at': '2026-06-01', 'status': 'tracking',
+         'award_date': '', 'award_price': '', 'award_vendor': '', 'last_checked': ''},
+        {'id': 'B_2', 'name': 'Tender 2', 'unit': 'U2', 'date': '2026-06-02',
+         'category': '財物', 'added_at': '2026-06-02', 'status': 'awarded',
+         'award_date': '2026-06-03', 'award_price': '100000', 'award_vendor': 'Vendor X', 'last_checked': '2026-06-03'},
+        {'id': 'C_3', 'name': 'Tender 3', 'unit': 'U3', 'date': '2026-06-03',
+         'category': '勞務', 'added_at': '2026-06-03', 'status': 'tracking',
+         'award_date': '', 'award_price': '', 'award_vendor': '', 'last_checked': ''},
+    ]
+
+    import sheets
+    with patch.object(sheets, '_get_sheet', return_value=ws):
+        result = sheets.get_watching_tracking()
+
+    assert len(result) == 2
+    assert result[0]['id'] == 'A_1'
+    assert result[0]['_row_index'] == 2  # header is row 1, first data row is row 2
+    assert result[1]['id'] == 'C_3'
+    assert result[1]['_row_index'] == 4  # third data row (B_2 is row 3, C_3 is row 4)
