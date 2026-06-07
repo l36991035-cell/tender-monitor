@@ -1,25 +1,35 @@
 # notify.py
 import os
-import requests
+import smtplib
+import ssl
+from email.message import EmailMessage
 
-LINE_API = 'https://notify-api.line.me/api/notify'
-_MAX_TENDERS_PER_MSG = 10   # LINE Notify has a 1000-char limit per message
+_SMTP_HOST = 'smtp.gmail.com'
+_SMTP_PORT = 587
+_MAX_PER_MSG = 20
 
 
-def _send(token: str, message: str) -> None:
+def _send_email(subject: str, body: str) -> None:
+    user = os.environ.get('GMAIL_USER', '')
+    password = os.environ.get('GMAIL_APP_PASSWORD', '')
+    if not user or not password:
+        print('[notify] GMAIL_USER or GMAIL_APP_PASSWORD not set, skipping')
+        return
     try:
-        resp = requests.post(
-            LINE_API,
-            headers={'Authorization': f'Bearer {token}'},
-            data={'message': message},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            print(f'[notify] LINE sent OK')
-        else:
-            print(f'[notify] LINE error {resp.status_code}: {resp.text[:100]}')
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = user
+        msg['To'] = user
+        msg.set_content(body)
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ctx)
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        print(f'[notify] Email sent: {subject}')
     except Exception as e:
-        print(f'[notify] LINE failed: {e}')
+        print(f'[notify] Email failed: {e}')
 
 
 def match_keywords(records: list[dict], keywords: list[str]) -> list[dict]:
@@ -36,43 +46,37 @@ def match_keywords(records: list[dict], keywords: list[str]) -> list[dict]:
     return results
 
 
-def notify_new_tenders(token: str, matches: list[dict]) -> None:
-    if not token:
-        print('[notify] LINE_NOTIFY_TOKEN not set, skipping')
-        return
+def notify_new_tenders(matches: list[dict]) -> None:
     if not matches:
         return
-
-    header = f'\n【標案監控】今日 {len(matches)} 筆相符標案\n'
-    lines = []
-    for m in matches[:_MAX_TENDERS_PER_MSG]:
-        lines.append(
-            f'\n🔍 {m["matched_keyword"]}\n'
-            f'📋 {m["name"]}\n'
-            f'🏢 {m["unit"]}\n'
-            f'📅 {m["date"]}'
-        )
-    body = ''.join(lines)
-    if len(matches) > _MAX_TENDERS_PER_MSG:
-        body += f'\n\n⋯ 共 {len(matches)} 筆，其餘請至前端查看'
-
-    _send(token, header + body)
+    subject = f'【標案監控】今日 {len(matches)} 筆相符標案'
+    lines = [subject, '=' * 40]
+    for m in matches[:_MAX_PER_MSG]:
+        lines += [
+            f'關鍵字：{m["matched_keyword"]}',
+            f'標案名稱：{m["name"]}',
+            f'機關：{m["unit"]}',
+            f'公告日期：{m["date"]}',
+            '',
+        ]
+    if len(matches) > _MAX_PER_MSG:
+        lines.append(f'⋯ 共 {len(matches)} 筆，其餘請至前端查看')
+    _send_email(subject, '\n'.join(lines))
 
 
-def notify_awards(token: str, awarded: list[dict]) -> None:
-    """Send LINE notification for newly awarded tenders."""
-    if not token or not awarded:
+def notify_awards(awarded: list[dict]) -> None:
+    if not awarded:
         return
-
-    header = f'\n【決標通知】{len(awarded)} 筆標案已決標\n'
-    lines = []
-    for a in awarded[:_MAX_TENDERS_PER_MSG]:
-        price = f'{a.get("award_price", "")}元' if a.get('award_price') else '—'
-        lines.append(
-            f'\n📋 {a["name"]}\n'
-            f'🏢 {a["unit"]}\n'
-            f'🏆 {a.get("award_vendor", "—")}\n'
-            f'💰 {price}\n'
-            f'📅 {a.get("award_date", "—")}'
-        )
-    _send(token, header + ''.join(lines))
+    subject = f'【決標通知】{len(awarded)} 筆標案已決標'
+    lines = [subject, '=' * 40]
+    for a in awarded[:_MAX_PER_MSG]:
+        price = f'{a.get("award_price", "")} 元' if a.get('award_price') else '—'
+        lines += [
+            f'標案名稱：{a["name"]}',
+            f'機關：{a["unit"]}',
+            f'得標廠商：{a.get("award_vendor", "—")}',
+            f'決標金額：{price}',
+            f'決標日期：{a.get("award_date", "—")}',
+            '',
+        ]
+    _send_email(subject, '\n'.join(lines))
