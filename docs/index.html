@@ -111,9 +111,9 @@ function rowToTender(r) {
   return { id: r[0]||'', name: r[1]||'', unit: r[2]||'', date: r[3]||'', category: r[4]||'', method: r[5]||'' };
 }
 
-function tenderUrl(id) {
-  const pk = id.replace(/^TIQ-\d+-/, '');
-  return `https://web.pcc.gov.tw/prkms/urlSelector/common/tpam?pk=${pk}`;
+function tenderUrl(id, date) {
+  const ds = (date || '').replace(/-/g, '');
+  return `https://web.pcc.gov.tw/prkms/tender/common/noticeDate/redirectPublic?ds=${ds}&fn=${id}.xml`;
 }
 
 function renderRows(rows) {
@@ -123,7 +123,7 @@ function renderRows(rows) {
     <tr>
       <td class="td-date">${t.date}</td>
       <td class="td-unit">${esc(t.unit)}</td>
-      <td class="td-name"><a href="${tenderUrl(t.id)}" target="_blank" rel="noopener">${esc(t.name)}</a></td>
+      <td class="td-name"><a href="${tenderUrl(t.id, t.date)}" target="_blank" rel="noopener">${esc(t.name)}</a></td>
       <td class="td-method">${esc(t.method)}</td>
       <td><button class="btn-watch" data-t="${encodeURIComponent(JSON.stringify(t))}" onclick="addWatch(JSON.parse(decodeURIComponent(this.dataset.t)))">加入追蹤</button></td>
     </tr>`).join('');
