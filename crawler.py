@@ -171,6 +171,10 @@ def _clean_award_field(field: str, raw: str) -> str:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def fetch_date(target_date: date) -> int:
+    return len(_fetch_date_new(target_date))
+
+
+def _fetch_date_new(target_date: date) -> list[dict]:
     resp = requests.get(
         f'{BASE_URL}/prkms/tender/common/noticeDate/readPublish',
         params={'dateStr': _to_roc_date(target_date)},
@@ -189,6 +193,12 @@ def fetch_today() -> int:
     return fetch_date(today)
 
 
+def fetch_today_new() -> list[dict]:
+    """Like fetch_today() but returns the new records for keyword matching."""
+    today = datetime.now(TZ).date()
+    return _fetch_date_new(today)
+
+
 def fetch_backfill(days: int) -> int:
     today = datetime.now(TZ).date()
     total = 0
@@ -200,19 +210,18 @@ def fetch_backfill(days: int) -> int:
     return total
 
 
-def check_awards(lookback_days: int = 14) -> int:
+def check_awards(lookback_days: int = 14) -> list[dict]:
     """
     Scan the last `lookback_days` days of 決標公告 and update any matching
     'tracking' tenders in the watching sheet to 'awarded'.
 
-    Matching is done by normalised (unit, name) since case_number is not
-    currently stored in the watching sheet.
+    Returns a list of newly awarded tender dicts (with award_date/price/vendor)
+    for downstream notification.
     """
     tracking = sheets.get_watching_tracking()
     if not tracking:
-        return 0
+        return []
 
-    # Build lookup: (unit, name) → watching row
     watching_index: dict[tuple[str, str], dict] = {
         (_norm(t['unit']), _norm(t['name'])): t
         for t in tracking
@@ -220,11 +229,11 @@ def check_awards(lookback_days: int = 14) -> int:
 
     session = requests.Session()
     today = datetime.now(TZ).date()
-    updated = 0
+    newly_awarded: list[dict] = []
 
     for days_back in range(lookback_days):
         if not watching_index:
-            break  # All tracked tenders resolved; stop early
+            break
 
         check_date = today - timedelta(days=days_back)
         try:
@@ -245,15 +254,16 @@ def check_awards(lookback_days: int = 14) -> int:
                     continue
 
                 tender = watching_index.pop(key)
-                time.sleep(_DELAY)  # be polite before the detail fetch
+                time.sleep(_DELAY)
                 detail = _get_bdm_detail(award['bdm_id'], award['award_date'], session)
 
-                sheets.update_award(tender['_row_index'], {
+                award_info = {
                     'award_date':   detail.get('award_date',  award['award_date']),
                     'award_price':  detail.get('award_price', ''),
                     'award_vendor': detail.get('award_vendor', ''),
-                })
-                updated += 1
+                }
+                sheets.update_award(tender['_row_index'], award_info)
+                newly_awarded.append({**tender, **award_info})
                 print(f'[check_awards] awarded: {award["unit"]} / {award["name"][:40]}')
 
         except Exception as e:
@@ -261,7 +271,7 @@ def check_awards(lookback_days: int = 14) -> int:
 
         time.sleep(_DELAY)
 
-    return updated
+    return newly_awarded
 
 
 def debug_parse(target_date: date | None = None) -> None:
