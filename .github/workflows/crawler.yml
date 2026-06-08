@@ -2,7 +2,9 @@ name: Tender Crawler
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # UTC 00:00 = Taiwan 08:00
+    - cron: '0 0 * * *'   # UTC 00:00 = Taiwan 08:00（主要）
+    - cron: '0 4 * * *'   # UTC 04:00 = Taiwan 12:00（備援）
+    - cron: '0 8 * * *'   # UTC 08:00 = Taiwan 16:00（備援）
   workflow_dispatch:      # allow manual trigger from GitHub UI
 
 env:
