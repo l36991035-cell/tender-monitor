@@ -17,8 +17,9 @@ _HEADERS = {
     'Referer': f'{BASE_URL}/prkms/tender/common/noticeDate/indexNoticeDate',
 }
 
-# Matches both "<1> unit：case_no - name" (TIQ) and "unit：case_no - name" (BDM, no leading number)
-_LINK_RE = re.compile(r'(?:<\d+>\s*)?(.+?)：(.+?)\s*-\s*(.+)')
+# Matches old format "<1> unit：case_no - name" and new format "[<1> unit：case_no - name]"
+# Leading [ and trailing ] are stripped by the pattern.
+_LINK_RE = re.compile(r'[\[]*(?:<\d+>\s*)?(.+?)：(.+?)\s+-\s+(.+?)[\]]*\s*$')
 
 
 def _to_roc_date(d: date) -> str:
@@ -35,24 +36,56 @@ def _parse_readpublish(soup: BeautifulSoup, target_date: date) -> tuple[list[dic
     """
     Parse a readPublish page into (tenders, awards).
 
-    The page mixes 招標公告 (TIQ-…) and 決標公告 (BDM-…) sections.
-    We track the current section via anchor id, then split by href prefix.
+    Supports two HTML structures:
+    - Old: <table class="tenderCase"><a class="tenderLinkPublish" href="TIQ-…">
+    - New: bare <a href="TIQ-…">[<1> unit：case_no - name]</a>
 
-    Two parsing paths for awards:
-    - Primary: BDM inside a <table class="tenderCase"> (same structure as TIQ)
-    - Fallback: bare <a href="BDM-…"> link outside tenderCase (different markup)
+    Section tracking supports both <a id="xxx公告"> (old) and <a href="#xxx公告"> (new).
     """
     tenders: list[dict] = []
     awards: list[dict] = []
     current_section = ''
+    seen_tiq: set[str] = set()
     seen_bdm: set[str] = set()
 
     for el in soup.find_all(['a', 'table']):
-        # Track which section we are in
-        if el.name == 'a' and el.get('id') and '公告' in el.get('id', ''):
-            current_section = el.get('id', '')
+        if el.name == 'a':
+            href = el.get('href', '')
 
-        # Primary path: tenderCase table (used by TIQ; may also be used by BDM)
+            # Section tracking: old <a id="xxx公告"> or new <a href="#xxx公告">
+            if el.get('id') and '公告' in el.get('id', ''):
+                current_section = el.get('id', '')
+            elif href.startswith('#') and '公告' in href:
+                current_section = href.lstrip('#')
+
+            # TIQ: bare link (new structure; also deduplicates against old table path)
+            elif href.startswith('TIQ-'):
+                record_id = href.replace('.xml', '')
+                if record_id not in seen_tiq:
+                    link_text = el.get_text(' ', strip=True)
+                    m = _LINK_RE.match(link_text)
+                    if m:
+                        seen_tiq.add(record_id)
+                        tenders.append({
+                            'id':       record_id,
+                            'name':     m.group(3).strip(),
+                            'unit':     m.group(1).strip(),
+                            'date':     target_date.isoformat(),
+                            'category': '',
+                            'method':   current_section,
+                        })
+
+            # BDM: bare award link
+            elif href.startswith('BDM-') and _is_award_section(current_section):
+                record_id = href.replace('.xml', '')
+                if record_id not in seen_bdm:
+                    link_text = el.get_text(' ', strip=True)
+                    m = _LINK_RE.match(link_text)
+                    if m:
+                        seen_bdm.add(record_id)
+                        awards.append(_make_award(record_id, m, target_date))
+
+        # Old structure: <table class="tenderCase"> with nested tenderLinkPublish
         elif el.name == 'table' and 'tenderCase' in (el.get('class') or []):
             link = el.find('a', class_='tenderLinkPublish')
             if not link:
@@ -64,7 +97,8 @@ def _parse_readpublish(soup: BeautifulSoup, target_date: date) -> tuple[list[dic
                 continue
             record_id = href.replace('.xml', '')
 
-            if href.startswith('TIQ-'):
+            if href.startswith('TIQ-') and record_id not in seen_tiq:
+                seen_tiq.add(record_id)
                 tenders.append({
                     'id':       record_id,
                     'name':     m.group(3).strip(),
@@ -73,24 +107,7 @@ def _parse_readpublish(soup: BeautifulSoup, target_date: date) -> tuple[list[dic
                     'category': '',
                     'method':   current_section,
                 })
-            elif href.startswith('BDM-') and _is_award_section(current_section):
-                seen_bdm.add(record_id)
-                awards.append(_make_award(record_id, m, target_date))
-
-        # Fallback path: bare BDM link not wrapped in tenderCase
-        # (find_all visits nested <a> elements too, so seen_bdm prevents double-counting)
-        elif (
-            el.name == 'a'
-            and _is_award_section(current_section)
-            and el.get('href', '').startswith('BDM-')
-        ):
-            href = el.get('href', '')
-            record_id = href.replace('.xml', '')
-            if record_id in seen_bdm:
-                continue
-            link_text = el.get_text(' ', strip=True)
-            m = _LINK_RE.match(link_text)
-            if m:
+            elif href.startswith('BDM-') and _is_award_section(current_section) and record_id not in seen_bdm:
                 seen_bdm.add(record_id)
                 awards.append(_make_award(record_id, m, target_date))
 

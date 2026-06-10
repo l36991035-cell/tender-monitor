@@ -68,9 +68,9 @@ def test_append_raw_writes_new_records(monkeypatch):
             {'id': 'A001_JOB1', 'name': 'Test Tender', 'unit': 'Agency A',
              'date': '2026-06-06', 'category': '工程', 'method': '公開招標'},
         ]
-        count = sheets.append_raw(records)
+        result = sheets.append_raw(records)
 
-    assert count == 1
+    assert len(result) == 1
     ws.append_rows.assert_called_once()
     appended = ws.append_rows.call_args[0][0]
     assert len(appended) == 1
@@ -96,9 +96,9 @@ def test_append_raw_skips_duplicates(monkeypatch):
             {'id': 'A002_JOB2', 'name': 'New Tender', 'unit': 'Agency B',
              'date': '2026-06-06', 'category': '財物', 'method': '公開招標'},
         ]
-        count = sheets.append_raw(records)
+        result = sheets.append_raw(records)
 
-    assert count == 1  # only A002_JOB2 is new
+    assert len(result) == 1  # only A002_JOB2 is new
     appended = ws.append_rows.call_args[0][0]
     assert appended[0][0] == 'A002_JOB2'
 
@@ -112,12 +112,12 @@ def test_append_raw_empty_sheet(monkeypatch):
 
     import sheets
     with patch.object(sheets, '_get_sheet', return_value=ws):
-        count = sheets.append_raw([
+        result = sheets.append_raw([
             {'id': 'X_Y', 'name': 'N', 'unit': 'U', 'date': '2026-06-06',
              'category': '工程', 'method': '公開'}
         ])
 
-    assert count == 1
+    assert len(result) == 1
 
 
 def test_get_watching_tracking_returns_only_tracking(monkeypatch):
