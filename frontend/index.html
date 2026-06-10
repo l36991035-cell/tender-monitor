@@ -187,7 +187,7 @@ async function init() {
     if (kws) document.getElementById('search').value = kws;
 
     const raw = await cachedSheets('raw', 'raw');
-    allRows = raw.slice(1).map(rowToTender).filter(t=>t.id);
+    allRows = raw.slice(1).map(rowToTender).filter(t=>t.id).sort((a,b)=>b.date.localeCompare(a.date));
     filtered = [...allRows];
     document.getElementById('stats').textContent = `共 ${allRows.length.toLocaleString()} 筆`;
     goPage(1);
