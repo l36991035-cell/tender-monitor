@@ -1,6 +1,7 @@
 # main.py
 import argparse
 import sys
+import traceback
 
 import crawler
 import sheets
@@ -49,6 +50,7 @@ def main():
         else:
             run_daily()
     except Exception as e:
+        traceback.print_exc(file=sys.stderr)
         print(f'[FATAL] {e}', file=sys.stderr)
         sys.exit(1)
 
