@@ -1,7 +1,9 @@
 # notify.py
 import os
+import json
 import smtplib
 import ssl
+from datetime import datetime
 from email.message import EmailMessage
 
 _SMTP_HOST = 'smtp.gmail.com'
@@ -46,9 +48,23 @@ def match_keywords(records: list[dict], keywords: list[str]) -> list[dict]:
     return results
 
 
+def _save_matches_to_dashboard(matches: list[dict]) -> None:
+    output_path = os.environ.get('DASHBOARD_TENDER_PATH', '')
+    if not output_path or not matches:
+        return
+    try:
+        data = {'saved_at': datetime.now().isoformat(), 'matches': matches}
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f'[notify] Dashboard results saved to {output_path}')
+    except Exception as e:
+        print(f'[notify] Failed to save dashboard results: {e}')
+
+
 def notify_new_tenders(matches: list[dict]) -> None:
     if not matches:
         return
+    _save_matches_to_dashboard(matches)
     subject = f'【標案監控】今日 {len(matches)} 筆相符標案'
     lines = [subject, '=' * 40]
     for m in matches[:_MAX_PER_MSG]:
