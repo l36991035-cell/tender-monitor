@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import crawler
+import notify
 
 
 def _load_keywords() -> list[str]:
@@ -65,6 +66,9 @@ def run_daily():
 
     print('[2/2] Saving results...')
     _save_results(matches)
+
+    print('[3/3] Sending email notification...')
+    notify.notify_new_tenders(matches)
 
 
 def main():
