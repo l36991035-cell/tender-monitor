@@ -75,21 +75,22 @@ def _parse_tenders(soup: BeautifulSoup, target_date: date) -> list[dict]:
     return tenders
 
 
-def fetch_today_new() -> list[dict]:
-    today = datetime.now(TZ).date()
+def fetch_today_new(target_date: date | None = None) -> list[dict]:
+    if target_date is None:
+        target_date = datetime.now(TZ).date()
     resp = requests.get(
         f'{BASE_URL}/prkms/tender/common/noticeDate/readPublish',
-        params={'dateStr': _to_roc_date(today)},
+        params={'dateStr': _to_roc_date(target_date)},
         headers=_HEADERS,
         timeout=60,
     )
     if resp.status_code == 500:
-        print(f'[crawler] PCC 今日無資料（500），視為 0 筆')
+        print(f'[crawler] PCC {target_date} 無資料（500），視為 0 筆')
         return []
     resp.raise_for_status()
     resp.encoding = 'utf-8'
     soup = BeautifulSoup(resp.text, 'html.parser')
-    return _parse_tenders(soup, today)
+    return _parse_tenders(soup, target_date)
 
 
 def debug_parse(target_date: date | None = None) -> None:

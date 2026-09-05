@@ -6,6 +6,8 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+from datetime import date
+
 import crawler
 import notify
 
@@ -52,8 +54,11 @@ def _save_results(matches: list[dict]) -> None:
 
 
 def run_daily():
-    print('[1/2] Fetching today\'s tenders...')
-    tenders = crawler.fetch_today_new()
+    date_override = os.environ.get('DATE_OVERRIDE', '')
+    target_date = date.fromisoformat(date_override) if date_override else None
+    label = date_override if date_override else '今天'
+    print(f'[1/3] Fetching tenders for {label}...')
+    tenders = crawler.fetch_today_new(target_date)
     print(f'      → {len(tenders)} 筆標案')
 
     keywords = _load_keywords()
