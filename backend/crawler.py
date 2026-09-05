@@ -83,6 +83,9 @@ def fetch_today_new() -> list[dict]:
         headers=_HEADERS,
         timeout=60,
     )
+    if resp.status_code == 500:
+        print(f'[crawler] PCC 今日無資料（500），視為 0 筆')
+        return []
     resp.raise_for_status()
     resp.encoding = 'utf-8'
     soup = BeautifulSoup(resp.text, 'html.parser')
