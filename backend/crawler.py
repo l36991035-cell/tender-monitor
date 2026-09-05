@@ -9,8 +9,7 @@ BASE_URL = 'https://web.pcc.gov.tw'
 TZ = pytz.timezone('Asia/Taipei')
 
 _HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-    'Referer': f'{BASE_URL}/prkms/tender/common/noticeDate/indexNoticeDate',
+    'User-Agent': 'Mozilla/5.0',
 }
 
 _LINK_RE = re.compile(r'[\[]*(?:<\d+>\s*)?(.+?)：(.+?)\s+-\s+(.+?)[\]]*\s*$')
